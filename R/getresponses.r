@@ -2,7 +2,8 @@ getresponses <- function(
     respondents,
     survey,
     api_key = getOption('sm_api_key'),
-    oauth_token = getOption('sm_oauth_token')
+    oauth_token = getOption('sm_oauth_token'),
+    ...
 ){
     if(inherits(respondents, "sm_respondent")) {
         respondents <- respondents$respondent_id
@@ -27,10 +28,10 @@ getresponses <- function(
     h <- add_headers(Authorization=token,
                      'Content-Type'='application/json')
     b <- toJSON(list(respondent_ids = as.list(respondents), survey_id = survey), auto_unbox = TRUE)
-    out <- POST(u, config = h, body = b)
+    out <- POST(u, config = h, ..., body = b)
     stop_for_status(out)
     content <- content(out, as='parsed')
-    if(content$status==3) {
+    if(content$status != 0) {
         warning("An error occurred: ",content$errmsg)
         return(content)
     } else {
@@ -44,11 +45,11 @@ getresponses <- function(
 
 print.sm_response <- function(x, ...){
     if(!is.null(x$respondent_id))
-        cat('Responent ID:',x$respondent_id,'\n')
+        cat('Respondent ID:',x$respondent_id,'\n')
     invisible(x)
 }
 
-as.data.frame.sm_response <- function(x, row.names, optional, details = NULL, ...){
+as.data.frame.sm_response <- function(x, row.names, optional, details = NULL, stringsAsFactors = FALSE, ...){
     if(is.null(details) && !is.null(attr(x, 'survey_id'))) {
         details <- surveydetails(survey = attr(x, 'survey_id'))
     } else if(!is.null(details)){
@@ -79,26 +80,35 @@ as.data.frame.sm_response <- function(x, row.names, optional, details = NULL, ..
                         })
                      })
     answerchoices <- unlist(do.call(c, answerchoices))
-    # recode responses by looking up `question_id` in details and recoding answers
-    responses <- mapply(function(i, type) {
-        # potentially handle different variable types better
-        if(type %in% c('single_choice','multiple_choice'))
-            unname(answerchoices[match(unlist(i$answers), names(answerchoices))])
-        else
-            unname(unlist(i$answers))
-    }, x$questions, qtypes)
+    # extract question_ids
     question_ids <- unlist(sapply(x$questions, `[`, 'question_id'))
-    responses <- setNames(responses, question_ids)
-    # convert multiple choice to multiple variables
-    len <- sapply(responses, length)
-    outvarnames <- unlist(mapply(function(cnt, name) {
-                            if(cnt>1)
-                                paste(name,1:cnt,sep='.')
-                            else
-                                name
-                        }, len, names(len)))
-    # build dataframe, where variable names are `question_id` and values are `answer_id`
-    out <- setNames(as.data.frame(matrix(unlist(responses), nrow=1)), outvarnames)
+    # count number of answers per question
+    nanswers <- sapply(x$questions, function(z) length(z$answers))
+    
+    # recode responses by looking up `question_id` in details and recoding answers
+    responses <- character()
+    for (i in seq_along(x$questions)) {
+        if (qtypes[question_ids[i]] %in% c('single_choice','multiple_choice')) {
+            tmp <- unname(answerchoices[match(unlist(x$questions[[i]]$answers), names(answerchoices))])
+        } else if (qtypes[question_ids[i]] %in% c('open_ended')) {
+            tmp <- unname(unlist(lapply(x$questions[[i]]$answers, `[`, "text")))
+        } else {
+            tmp <- unname(unlist(x$questions[[i]]$answers))
+        }
+        responses <- c(responses, tmp)
+    }
+    rm(tmp)
+    responses <- setNames(responses, rep(unlist(lapply(x$questions, `[`, "question_id")), nanswers))
+    
+    unique_names <- unique(names(responses))
+    for (i in seq_along(unique_names)) {
+        cnt <- names(responses)[names(responses) == unique_names[i]]
+        if (length(cnt) > 1) {
+            names(responses)[names(responses) == unique_names[i]] <- 
+                paste0(unique_names[i], ".", seq_along(cnt))
+        }
+    }
+    out <- setNames(as.data.frame(matrix(unlist(responses), nrow=1), stringsAsFactors = stringsAsFactors), names(responses))
     
     # rename columns to something
     for(i in seq_along(out)) {
@@ -108,7 +118,7 @@ as.data.frame.sm_response <- function(x, row.names, optional, details = NULL, ..
     return(out)
 }
 
-as.data.frame.sm_response_list <- function(x, row.names, optional, details = NULL, ...){
+as.data.frame.sm_response_list <- function(x, row.names, optional, details = NULL, stringsAsFactors = FALSE, ...){
     if(is.null(details) && !is.null(attr(x[[1]], 'survey_id'))) {
         details <- surveydetails(survey = attr(x[[1]], 'survey_id'))
     } else if(!is.null(details)){
@@ -122,7 +132,31 @@ as.data.frame.sm_response_list <- function(x, row.names, optional, details = NUL
     } else {
         stop("'details' is missing and cannot be determined automatically")
     }
-    tmp <- lapply(x, as.data.frame, details = details, ...)
+    tmp <- lapply(x, as.data.frame, details = details, stringsAsFactors = stringsAsFactors, ...)
     out <- rbind.fill(tmp)
     return(out)
+}
+
+getallresponses <- function(
+    survey,
+    api_key = getOption('sm_api_key'),
+    oauth_token = getOption('sm_oauth_token'),
+    wait = 0,
+    ...
+) {
+    r <- respondentlist(survey, api_key = api_key, oauth_token = oauth_token, ...)
+    Sys.sleep(wait)
+    respondents <- unname(sapply(r, `[`, "respondent_id"))
+    Sys.sleep(wait)
+    n <- ceiling(length(respondents)/100)
+    w <- split(1:length(respondents), rep(1:n, each = 100)[1:length(respondents)])
+    out <- list()
+    for (i in n) {
+        out <- c(out, getresponses(unlist(respondents[w[[i]]]), survey = survey, 
+                                   api_key = api_key, oauth_token = oauth_token, ...))
+        Sys.sleep(wait)
+    }
+    class(out) <- 'sm_response_list'
+    d <- surveydetails(survey, api_key = api_key, oauth_token = oauth_token, ...)
+    as.data.frame(out, details = d)
 }

@@ -1,7 +1,8 @@
 responsecounts <- function(
     collector,
     api_key = getOption('sm_api_key'),
-    oauth_token = getOption('sm_oauth_token')
+    oauth_token = getOption('sm_oauth_token'),
+    ...
 ){
     if(!is.null(collector) && inherits(collector, 'sm_collector'))
         collector <- collector$collector_id
@@ -17,10 +18,10 @@ responsecounts <- function(
     h <- add_headers(Authorization=token,
                      'Content-Type'='application/json')
     b <- toJSON(list(collector_id = collector), auto_unbox = TRUE)
-    out <- POST(u, config = h, body = b)
+    out <- POST(u, config = h, ..., body = b)
     stop_for_status(out)
     content <- content(out, as='parsed')
-    if(content$status==3) {
+    if(content$status != 0) {
         warning("An error occurred: ",content$errmsg)
         return(content)
     } else

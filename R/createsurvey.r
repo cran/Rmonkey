@@ -3,13 +3,14 @@ createsurvey <- function(
     survey = NULL,
     title,
     collector_name = NULL,
-    type = 'email', # only 'email' is allowed
+    type = 'email',
     recipients = NULL,
     email_replyto = NULL,
     email_subject = NULL,
     email_body = NULL,
     api_key = getOption('sm_api_key'),
-    oauth_token = getOption('sm_oauth_token')
+    oauth_token = getOption('sm_oauth_token'),
+    ...
 ){
     if(!is.null(api_key)) {
         u <- paste('https://api.surveymonkey.net/v2/batch/create_flow?',
@@ -52,8 +53,9 @@ createsurvey <- function(
                   email_message = if(is.null(email_body)) {
                   list(subject = email_subject, reply_email = email_replyto)
                   } else { list(reply_email = email_replyto,
-                                            subject = email_subject,
-                                            body = email_body)})
+                                subject = email_subject,
+                                body_text = email_body)
+                  })
     } else if(!is.null(survey)){
         if(inherits(survey, 'sm_survey'))
             survey <- survey$survey_id
@@ -67,15 +69,16 @@ createsurvey <- function(
                   email_message = if(is.null(email_body)) {
                   list(subject = email_subject, reply_email = email_replyto)
                   } else { list(reply_email = email_replyto,
-                                            subject = email_subject,
-                                            body = email_body)})
+                                subject = email_subject,
+                                body_text = email_body
+                  )})
     }
     b <- toJSON(b, auto_unbox = TRUE)
     h <- add_headers(Authorization=token, 'Content-Type'='application/json')
-    out <- POST(u, config = h, body = b)
+    out <- POST(u, config = h, ..., body = b)
     stop_for_status(out)
     content <- content(out, as='parsed')
-    if(content$status==3){
+    if(content$status != 0){
         warning("An error occurred: ",content$errmsg)
         return(content)
     } else {

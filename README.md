@@ -1,12 +1,14 @@
 # A Survey Monkey R Client #
 
-[![Build Status](https://travis-ci.org/leeper/Rmonkey.png?branch=master)](https://travis-ci.org/leeper/Rmonkey)
+[![Build Status](https://travis-ci.org/cloudyr/Rmonkey.png?branch=master)](https://travis-ci.org/cloudyr/Rmonkey)
+[![CRAN Version](http://www.r-pkg.org/badges/version/Rmonkey)](http://cran.r-project.org/package=Rmonkey)
+![Downloads](http://cranlogs.r-pkg.org/badges/Rmonkey)
 
 **Rmonkey** provides access to [Survey Monkey](https://www.surveymonkey.com/), for the complete integration of survey data collection and analysis into a single, easily reproducible workflow.
 
 ## Installation ##
 
-**Rmonkey** is [available on GitHub](http://github.com/leeper/Rmonkey) and can (soon) be installed from within R from your favorite CRAN mirror:
+**Rmonkey** is [available on GitHub](http://github.com/cloudyr/Rmonkey) and can (soon) be installed from within R from your favorite CRAN mirror:
 
 ```R
 install.packages("Rmonkey")
@@ -20,20 +22,20 @@ if(!require("devtools")) {
     install.packages("devtools")
     library("devtools")
 }
-install_github("leeper/Rmonkey")
+install_github("cloudyr/Rmonkey")
 library("Rmonkey")
 ```
 
 ## Setup ##
 
-To use Rmonkey, the user must have a Survey Monkey account, a Mashable Survey Monkey Developer account, and a registered API application. To create a Survey Monkey account, visit https://www.surveymonkey.com/user/sign-in/. To create a Mashable developer account, visit https://developer.surveymonkey.com/member/register. Once registered, it is relatively easy to obtain an API key and secret client ID. It is then also possible to register an API application. This requires a name, OAuth redirect URL, and a brief description. In order to use Rmonkey, the redirect url must be registered as `http://localhost:1410`.
+To use Rmonkey, the user must have a Survey Monkey account, a Mashery Survey Monkey Developer account, and a registered API application. To create a Survey Monkey account, visit https://www.surveymonkey.com/user/sign-in/. To create a Mashery developer account, visit https://developer.surveymonkey.com/member/register. Once registered, it is relatively easy to obtain an API key and secret client ID. It is then also possible to register an API application. This requires a name, OAuth redirect URL, and a brief description. In order to use Rmonkey, the redirect url must be registered as `http://localhost:1410`.
 
 Once everything is registered, the relevant variables can be loaded into R using `options`:
 
 ```R
 options(sm_api_key = 'YourAPIKey')
 options(sm_secret = 'YourAPISecret')
-options(sm_client_id = 'YourMashableDeveloperUsername')
+options(sm_client_id = 'YourMasheryDeveloperUsername')
 ```
 
 Rmonkey uses these values inside `smlogin` to initiate an OAuth2.0 login. Calling `smlogin()`, you will redirected to your web browser, where you will login with your regular Survey Monkey account information. `sm_login` will then store a durable OAuth token in `options('sm_oauth_token')`, which is automatically retrieved in subsequent Rmonkey operations.
@@ -79,6 +81,14 @@ as.data.frame(g)
 ```
 
 `getresponses` returns an object of class "sm_response_list", which has an `as.data.frame` method. Thus to convert the resulting list to a usable dataframe, simply use the standard: `as.data.frame`. Note: Survey Monkey returns variable numbers and full question wordings for each variable. The variable numbers are used to create the data.frame column names and the full question wordings are stored in a "question" attribute for each column; and all variables are encoded as factors. You may want to manually rename and recode the columns before proceeding.
+
+From v0.2.15, Rmonkey can also return a data.frame containing all responses for a survey using just one function:
+
+```R
+getallresponses(s[[1]])
+```
+
+This way there is no need to iterate through respondents, or manually call the `as.data.frame()` method. This is not widely tested, yet.
 
 
 ### Polling for new responses ###
@@ -154,7 +164,7 @@ output: pdf_document
     ```{r, results = "hide", echo = "false"}
     options(sm_api_key = 'YourAPIKey')
     options(sm_secret = 'YourAPISecret')
-    options(sm_client_id = 'YourMashableDeveloperUsername')
+    options(sm_client_id = 'YourMasheryDeveloperUsername')
     options(sm_oauth_token = 'YourOAuthToken')
     ```
 
@@ -162,7 +172,9 @@ This document contains the survey results:
 
     ```R
     # retrieve responses
-    dat <- as.data.frame(getresponses(responselist(survey)))
+    s <- surveylist()
+    survey <- s[[1]]
+    # dat <- getallresponses(s[[1]])
     summary(dat)
     # etc.
     ```
